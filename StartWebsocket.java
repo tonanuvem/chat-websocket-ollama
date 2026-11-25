@@ -1,0 +1,58 @@
+
+package fiap;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.websocket.OnClose;
+import jakarta.websocket.OnError;
+import jakarta.websocket.OnMessage;
+import jakarta.websocket.OnOpen;
+import jakarta.websocket.server.PathParam;
+import jakarta.websocket.server.ServerEndpoint;
+import jakarta.websocket.Session;
+
+@ServerEndpoint("/chat/{username}")         
+@ApplicationScoped
+public class StartWebSocket {
+
+    Map<String, Session> sessions = new ConcurrentHashMap<>(); 
+    
+    //@Inject
+    //GreetingResource apichat;
+
+    @OnOpen
+    public void onOpen(Session session, @PathParam("username") String username) {
+        sessions.put(username, session);
+        broadcast("Usuário \'" + username + "\' entrou" + "\n");
+    }
+
+    @OnClose
+    public void onClose(Session session, @PathParam("username") String username) {
+        sessions.remove(username);
+        broadcast("Usuário :" + username + ": saiu" + "\n");
+    }
+
+    @OnError
+    public void onError(Session session, @PathParam("username") String username, Throwable throwable) {
+        sessions.remove(username);
+        broadcast("Usuário :" + username + ": saiu com erro: " + throwable + "\n");
+    }
+
+    @OnMessage
+    public void onMessage(String message, @PathParam("username") String username) {
+        broadcast(">> " + username + ": " + message + "\n");
+        GreetingResource.msgs.add(message);
+    }
+
+    protected void broadcast(String message) {
+        sessions.values().forEach(s -> {
+            s.getAsyncRemote().sendObject(message, result ->  {
+                if (result.getException() != null) {
+                    System.out.println("Falha ao enviar a mensagem: " + result.getException());
+                }
+            });
+        });
+    }
+}
